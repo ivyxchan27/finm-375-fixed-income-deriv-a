@@ -102,3 +102,85 @@ def black_implied_vol_caplet(caplet_pv, tau, strike, fwd_rate, discount_factor,
 
     return implied_vol
     
+
+"""
+PRICING SWAPTIONS
+"""
+def calc_swap_annuity(discounts_df, swap_start, swap_tenor, frequency = 0.25):
+    """
+    This function computes the swap annuity.
+
+    Equation:
+    A(0) = sum_{i=1..M} [ tau * Z(0,T_i) ]
+
+    Args:
+    - discounts_df (pd.Dataframe): dataframe that has the columns "tenor" and "discounts"
+    - swap_start (float): when the swap begins
+    - swap_tenor (float): length of underlying swap
+    - frequency (int): accrual fraction (default quarterly = 0.25)
+
+    Returns (float): annuity A(0)
+    """
+    num_payments = int(round(swap_tenor / frequency))
+    payment_dates = (swap_start + frequency * np.arange(1, num_payments + 1))
+
+    discount_factors_on_payments = np.interp(payment_dates, discounts_df["tenor"], discounts_df["discounts"])
+
+    return float(np.sum(frequency * discount_factors_on_payments))
+
+
+def calc_forward_swap_rate(discounts_df, swap_start, swap_tenor, frequency = 0.25):
+    """
+    Docstring for calc_forward_swap_rate
+
+    Equation:
+    c_sw^{fwd}(0;T0,Tn;frequency) = frequency * (Z(0,T0) - Z(0,Tn)) / sum_{i=1..M} Z(0,T_i)
+    
+    Args:
+    - discounts_df (pd.Dataframe): dataframe that has the columns "tenor" and "discounts"
+    - swap_start (float): when the swap begins
+    - swap_tenor (float): length of underlying swap
+    - frequency (int): accrual fraction (default quarterly = 0.25)
+
+    Returns (float): the forward swap rate in decimal
+    """
+    swap_end = swap_start + swap_tenor
+
+    discount_start = np.interp(swap_start, discounts_df["tenor"], discounts_df["discounts"])
+    discount_end = np.interp(swap_end, discounts_df["tenor"], discounts_df["discounts"])
+
+    annuity = calc_swap_annuity(discounts_df, swap_start, swap_tenor, frequency)
+
+    return (discount_start - discount_end) / annuity
+
+
+def black_price_payer_swaption(black_vol, swap_start, strike, fwd_swap_rate, annuity,
+                              notional = 100.0):
+    """
+    This function uses Black's formula to price a payer swaption (call on forward swap rate).
+
+    Equation:
+    PV = notional * A(0) * [ S0*N(d1) - K*N(d2) ]
+
+    Args:
+    - black_vol (float): volatility in decimal
+    - swap_start (float): when the swap begins
+    - strike (float): "K" or the T-maturity swap rate
+    - fwd_swap_rate (float): the forward swap rate in decimal
+    - annuity (float): A(0)
+    - notional (float): default 100.0 (match your convention)
+
+    Returns (float): present value
+    """
+    if black_vol <= 0 or swap_start <= 0:
+        return float(notional * annuity * max(fwd_swap_rate - strike, 0.0))
+
+    if fwd_swap_rate <= 0 or strike <= 0:
+        raise ValueError("Black swaption formula requires positive S0 and K.")
+
+    d1 = (np.log(fwd_swap_rate / strike) + 0.5 * black_vol**2 * swap_start) / (black_vol * np.sqrt(swap_start))
+    d2 = d1 - (black_vol * np.sqrt(swap_start))
+
+    return float(notional * annuity * (fwd_swap_rate * norm.cdf(d1) - strike * norm.cdf(d2)))
+
+
