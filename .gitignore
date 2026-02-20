@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Zip files
+*.zip
+
+# Excel temp files
+~$*.xlsx
