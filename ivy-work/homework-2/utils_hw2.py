@@ -170,7 +170,7 @@ def black_price_payer_swaption(black_vol, swap_start, strike, fwd_swap_rate, ann
     - annuity (float): A(0)
     - notional (float): default 100.0 (match your convention)
 
-    Returns (float): present value
+    Returns (float): present value of the payer swaption
     """
     if black_vol <= 0 or swap_start <= 0:
         return float(notional * annuity * max(fwd_swap_rate - strike, 0.0))
@@ -184,3 +184,41 @@ def black_price_payer_swaption(black_vol, swap_start, strike, fwd_swap_rate, ann
     return float(notional * annuity * (fwd_swap_rate * norm.cdf(d1) - strike * norm.cdf(d2)))
 
 
+"""
+CASE STUDY - COLLARED FLOATER
+"""
+def shock_dfs(discounts_df, tenors_df, shock):
+    """
+    This function applies a parallel shift to discount factors multiplicatively,
+    equivalent to a continuous zero-rate parallel shock.
+
+    Equations:
+    DF_shocked(T) = DF(T) * exp(-shock * T)
+
+    Args:
+    - discounts_df (np.ndarray): base discount factors at each tenor
+    - tenors_df (np.ndarray): corresponding tenor values in years
+    - shock_bps (float): parallel shift applied to all spot rates
+
+    Returns (np.ndarray): shocked discount factors
+    """
+    return discounts_df * np.exp(-shock * tenors_df)
+
+
+def calc_numerical_duration(pv_down, pv_up, pv_base, shock):
+    """
+    This function calculates the numerical (modified) duration of an instrument via
+    central finite difference on the price-yield relationship.
+    
+    Equation:
+    D = (P(r - shock) - P(r + shock)) / (2 * shock * P(r))
+    
+    Args:
+    - pv_down (float): instrument price after a downward parallel shock (-shock)
+    - pv_up (float): instrument price after an upward parallel shock (+shock)
+    - pv_base (float): instrument price at the unshocked base curve
+    - shock (float): size of the parallel rate shock in decimal
+
+    Returns (float): numerical modified duration in years
+    """
+    return float((pv_down - pv_up) / (2 * shock * pv_base))
